@@ -1,4 +1,4 @@
-var CACHE = 'natokikotoba-v1';
+var CACHE = 'natokikotoba-v2';
 var FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function (e) {
