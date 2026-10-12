@@ -52,4 +52,189 @@ header h1 small{display:block;font-size:.65rem;color:var(--sub);font-weight:norm
 #bgmwrap{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden}
 #ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:20;padding:14px}
 #ov.show{display:flex}
-#box{background:var(--bg);border:1px solid var(--line);border-radius:16px;max-width:460px;width:100%;max-heig
+#box{background:var(--bg);border:1px solid var(--line);border-radius:16px;max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:18px}
+#box h2{margin:0 0 10px;font-size:1.1rem}
+#box label{display:block;margin:10px 0 4px;font-size:.85rem;color:var(--sub)}
+#box input,#box textarea,#box select{width:100%;min-height:44px;padding:8px;border:1.5px solid var(--line);border-radius:10px;background:var(--card)}
+#box textarea{min-height:110px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.trow{display:flex;gap:6px;align-items:center;margin:8px 0;flex-wrap:wrap;border-bottom:1px dashed var(--line);padding-bottom:8px}
+.trow input{flex:1;min-width:120px}
+#lock{position:fixed;inset:0;background:var(--bg);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px}
+#lock.show{display:flex}
+#lock input{width:200px;text-align:center;font-size:1.4rem;min-height:52px;border:2px solid var(--line);border-radius:12px;background:var(--card)}
+#msg{color:var(--sub);min-height:1.4em}
+#toast{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:20px;z-index:40;display:none;font-size:.9rem}
+#install{position:fixed;left:10px;right:10px;bottom:0;transform:translateY(120%);transition:transform .6s ease;background:var(--card);border:1.5px solid var(--acc);border-radius:16px 16px 0 0;padding:12px;z-index:15;display:flex;gap:8px;align-items:center}
+#install.show{transform:translateY(0)}
+#install p{flex:1;margin:0;font-size:.85rem}
+.help li{margin:8px 0;line-height:1.6}
+</style>
+</head>
+<body data-theme="kinari" data-font="mincho">
+<div id="lock"><h2>🔒 ナトキコトバ</h2><p>パスコードを入力してください</p>
+<input id="lockIn" type="password" inputmode="numeric" autocomplete="off" aria-label="パスコード"><button id="lockBtn" class="pri">ひらく</button><div id="msg"></div></div>
+<header>
+ <h1>ナトキコトバ<small>イロンナトキによりそうアプリ</small></h1>
+ <button id="bVert" aria-label="縦書きと横書きを切り替え">縦↔横</button>
+ <button id="bSet" aria-label="設定">⚙️</button>
+ <button id="bHelp" aria-label="使い方">❓</button>
+</header>
+<div id="chipbar"><div id="chips" role="tablist"></div><button id="bTagAdd" aria-label="新しい気分を追加">＋ 気分</button></div>
+<div id="stage"><div id="quote"></div></div>
+<div id="nav"><button id="bPrev" aria-label="前の言葉">◀ 前</button><span id="cnt"></span><button id="bNext" aria-label="次の言葉">次 ▶</button></div>
+<div id="acts"><button id="bAdd" class="pri">＋ 言葉を足す</button><button id="bEdit">✎ 直す</button><button id="bDel">🗑 消す</button><button id="bTag">🏷 気分を整える</button></div>
+<button id="bgm" aria-label="BGM">🎵</button>
+<div id="bgmwrap"></div>
+<div id="ov"><div id="box"></div></div>
+<div id="toast"></div>
+<div id="install"><p>📲 ホーム画面に追加してアプリとして使う</p><button id="insGo" class="pri">追加</button><button id="insNo" aria-label="閉じる">✕</button></div>
+
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+var KEY='natoki_v1',mem={};
+function $(i){return document.getElementById(i);}
+function sget(k){try{var v=localStorage.getItem(k);return v===null?(mem[k]||null):v;}catch(e){return mem[k]||null;}}
+function sset(k,v){mem[k]=v;try{localStorage.setItem(k,v);}catch(e){}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function uid(){return 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function hash(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return String(h);}
+function toast(t){var e=$('toast');if(!e)return;e.textContent=t;e.style.display='block';setTimeout(function(){e.style.display='none';},1800);}
+var def={tags:[{id:'t1',name:'落ち込んだとき',bgm:''},{id:'t2',name:'背中を押してほしいとき',bgm:''},{id:'t3',name:'静かに過ごしたいとき',bgm:''}],
+quotes:[{id:'q1',text:'求道すでに道である。',author:'宮沢賢治',tag:'t1'},
+{id:'q2',text:'牛になる事はどうしても必要です。',author:'夏目漱石',tag:'t2'},
+{id:'q3',text:'閑さや岩にしみ入る蝉の声',author:'松尾芭蕉',tag:'t3'}],
+set:{vertical:true,font:'mincho',theme:'kinari'},pass:''};
+var S;
+try{S=JSON.parse(sget(KEY)||'null');}catch(e){S=null;}
+if(!S||!S.tags||!S.quotes){S=JSON.parse(JSON.stringify(def));}
+if(!S.set){S.set=def.set;}
+function save(){try{sset(KEY,JSON.stringify(S));}catch(e){}}
+var cur='all',idx=0;
+function list(){return S.quotes.filter(function(q){return cur==='all'||q.tag===cur;});}
+function tagOf(id){for(var i=0;i<S.tags.length;i++){if(S.tags[i].id===id)return S.tags[i];}return null;}
+function applySet(){document.body.setAttribute('data-theme',S.set.theme);document.body.setAttribute('data-font',S.set.font);
+ var m=document.querySelector('meta[name=theme-color]');if(m){m.setAttribute('content',{kinari:'#f3ead8',white:'#ffffff',dark:'#16181d'}[S.set.theme]||'#f3ead8');}}
+function renderChips(){var c=$('chips');if(!c)return;var h='<button data-t="all" class="'+(cur==='all'?'on':'')+'">すべて</button>';
+ S.tags.forEach(function(t){h+='<button data-t="'+esc(t.id)+'" class="'+(cur===t.id?'on':'')+'">'+(cur===t.id?'✓ ':'')+esc(t.name)+'</button>';});
+ c.innerHTML=h;
+ try{var o=c.querySelector('button.on');if(o&&o.scrollIntoView){o.scrollIntoView({inline:'center',block:'nearest'});}}catch(e){}}
+function renderQuote(){var l=list(),q=$('quote');if(!q)return;q.className=S.set.vertical?'v':'';
+ if(!l.length){q.innerHTML='<span style="color:var(--sub)">まだ言葉がありません。<br>「＋ 言葉を足す」から追加できます。</span>';$('cnt').textContent='0 / 0';return;}
+ if(idx>=l.length)idx=0;if(idx<0)idx=l.length-1;var it=l[idx];
+ q.innerHTML=esc(it.text).replace(/\n/g,'<br>')+(it.author?'<span class="au">― '+esc(it.author)+'</span>':'');
+ $('cnt').textContent=(idx+1)+' / '+l.length;}
+// ---- BGM ----
+var audio=null,ytOn=false,bgmWanted=true,curBgm='';
+function ytId(u){var m=String(u||'').match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:null;}
+function stopBgm(){try{var w=$('bgmwrap');if(w)w.innerHTML='';if(audio){audio.pause();audio=null;}}catch(e){}ytOn=false;}
+function playBgm(){stopBgm();var t=tagOf(cur);curBgm=t&&t.bgm?t.bgm:'';
+ if(!curBgm||!bgmWanted||!navigator.onLine){updBgm();return;}
+ try{var id=ytId(curBgm);
+  if(id){var f=document.createElement('iframe');f.src='https://www.youtube.com/embed/'+id+'?autoplay=1&loop=1&playlist='+id+'&playsinline=1';
+   f.setAttribute('allow','autoplay');f.setAttribute('title','BGM');$('bgmwrap').appendChild(f);ytOn=true;}
+  else{audio=new Audio(curBgm);audio.loop=true;var p=audio.play();if(p&&p.catch)p.catch(function(){});}
+ }catch(e){}
+ updBgm();}
+function updBgm(){var b=$('bgm');if(!b)return;var on=navigator.onLine;
+ if(!curBgm){b.disabled=true;b.textContent='🎵 なし';return;}
+ if(!on){b.disabled=true;b.textContent='🎵 オフライン';return;}
+ b.disabled=false;
+ if(!bgmWanted){b.textContent='🔇 停止中';}else if(ytOn){b.textContent='📺 🎵';}else{b.textContent='🎵';}}
+$('bgm').addEventListener('click',function(){bgmWanted=!bgmWanted;playBgm();toast(bgmWanted?'BGMをかけます':'BGMを止めました');});
+window.addEventListener('online',playBgm);window.addEventListener('offline',function(){stopBgm();updBgm();});
+function selTag(id){cur=id;idx=0;renderChips();renderQuote();playBgm();}
+// ---- Modal ----
+function openM(html){$('box').innerHTML=html;$('ov').classList.add('show');}
+function closeM(){$('ov').classList.remove('show');$('box').innerHTML='';}
+$('ov').addEventListener('click',function(e){if(e.target===$('ov'))closeM();});
+function tagOpts(sel){return S.tags.map(function(t){return '<option value="'+esc(t.id)+'"'+(t.id===sel?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');}
+function addTag(name,bgm){var t={id:uid(),name:name,bgm:bgm||''};S.tags.push(t);save();return t;}
+// 上部エリアからワンタップで気分を追加
+function newTagForm(){
+ openM('<h2>新しい気分をつくる</h2><label>気分の名前</label><input id="nN" placeholder="例：笑いたいとき" maxlength="30"><label>BGMのURL（なくてもOK）</label><input id="nB" placeholder="YouTubeのURLなど"><div class="row"><button id="nOk" class="pri">つくる</button><button id="nNo">やめる</button></div>');
+ $('nNo').onclick=closeM;
+ $('nOk').onclick=function(){var n=$('nN').value.trim();if(!n){toast('名前を入れてください');return;}
+  var t=addTag(n,$('nB').value.trim());closeM();selTag(t.id);toast('「'+n+'」をつくりました');};
+ try{$('nN').focus();}catch(e){}}
+$('bTagAdd').onclick=newTagForm;
+function quoteForm(q){
+ var none=!S.tags.length;
+ openM('<h2>'+(q?'言葉を直す':'言葉を足す')+'</h2><label>言葉</label><textarea id="fT">'+esc(q?q.text:'')+'</textarea><label>だれの言葉？（空でもOK）</label><input id="fA" value="'+esc(q?q.author:'')+'">'+
+ '<div id="fGw"'+(none?' style="display:none"':'')+'><label>どんなときの言葉？</label><select id="fG">'+tagOpts(q?q.tag:(cur!=='all'?cur:(S.tags[0]?S.tags[0].id:'')))+'</select></div>'+
+ '<div class="row"><button id="fNewB"'+(none?' style="display:none"':'')+'>＋ 新しい気分をつくる</button></div>'+
+ '<div id="fNw" style="display:'+(none?'block':'none')+'"><label>新しい気分の名前</label><input id="fNew" placeholder="例：挑戦したいとき" maxlength="30"></div>'+
+ '<div class="row"><button id="fOk" class="pri">しまう</button><button id="fNo">やめる</button></div>');
+ $('fNo').onclick=closeM;
+ $('fNewB').onclick=function(){$('fNw').style.display='block';$('fNewB').style.display='none';try{$('fNew').focus();}catch(e){}};
+ $('fOk').onclick=function(){var t=$('fT').value.trim();if(!t){toast('言葉を入れてください');return;}
+  var tag=$('fG')?$('fG').value:'';var nn=$('fNew')?$('fNew').value.trim():'';
+  if(nn){tag=addTag(nn,'').id;}
+  if(q){q.text=t;q.author=$('fA').value.trim();q.tag=tag;}else{S.quotes.push({id:uid(),text:t,author:$('fA').value.trim(),tag:tag});}
+  save();closeM();if(nn){selTag(tag);}else{renderChips();renderQuote();}toast('書庫にしまいました');};}
+$('bAdd').onclick=function(){quoteForm(null);};
+$('bEdit').onclick=function(){var l=list();if(!l.length){toast('直せる言葉がありません');return;}quoteForm(l[idx]);};
+$('bDel').onclick=function(){var l=list();if(!l.length){return;}var q=l[idx];
+ openM('<h2>この言葉を消しますか？</h2><p>'+esc(q.text)+'</p><div class="row"><button id="dOk" class="pri">消す</button><button id="dNo">やめる</button></div>');
+ $('dNo').onclick=closeM;$('dOk').onclick=function(){S.quotes=S.quotes.filter(function(x){return x.id!==q.id;});save();closeM();renderQuote();toast('消しました');};};
+function tagForm(){
+ var h='<h2>気分を整える</h2><p style="font-size:.8rem;color:var(--sub)">BGMはYouTubeのURLなどを入れると、その気分を開いたときに裏で流れます。</p>';
+ S.tags.forEach(function(t){h+='<div class="trow" data-id="'+esc(t.id)+'"><input class="tn" value="'+esc(t.name)+'" aria-label="気分の名前"><input class="tb" value="'+esc(t.bgm)+'" placeholder="BGMのURL（なくてもOK）" aria-label="BGMのURL"><button class="td" aria-label="この気分を消す">🗑</button></div>';});
+ h+='<div class="trow"><input id="nTn" placeholder="新しい気分（例：笑いたいとき）"><button id="nTa" class="pri">＋ 作る</button></div><div class="row"><button id="tOk" class="pri">保存して閉じる</button></div>';
+ openM(h);
+ function collect(){var rs=document.querySelectorAll('#box .trow[data-id]');for(var i=0;i<rs.length;i++){var t=tagOf(rs[i].getAttribute('data-id'));if(t){var n=rs[i].querySelector('.tn').value.trim();if(n)t.name=n;t.bgm=rs[i].querySelector('.tb').value.trim();}}}
+ var ds=document.querySelectorAll('#box .td');
+ for(var j=0;j<ds.length;j++){ds[j].onclick=function(){var id=this.parentNode.getAttribute('data-id');collect();
+  if(!confirm('この気分を消します。中の言葉は「すべて」に残ります。よろしいですか？'))return;
+  S.tags=S.tags.filter(function(t){return t.id!==id;});S.quotes.forEach(function(q){if(q.tag===id)q.tag='';});if(cur===id)cur='all';save();tagForm();};}
+ $('nTa').onclick=function(){collect();var n=$('nTn').value.trim();if(!n){toast('名前を入れてください');return;}addTag(n,'');tagForm();};
+ $('tOk').onclick=function(){collect();save();closeM();renderChips();renderQuote();playBgm();toast('保存しました');};}
+$('bTag').onclick=tagForm;
+// ---- Settings ----
+function setForm(){
+ function b(g,v,l){return '<button data-g="'+g+'" data-v="'+v+'" class="'+(String(S.set[g])===String(v)?'on':'')+'">'+(String(S.set[g])===String(v)?'✓ ':'')+l+'</button>';}
+ openM('<h2>設定</h2><label>文字の向き</label><div class="row">'+b('vertical',true,'縦書き')+b('vertical',false,'横書き')+'</div>'+
+ '<label>文字のかたち</label><div class="row">'+b('font','mincho','明朝')+b('font','gothic','ゴシック')+b('font','maru','丸ゴシック')+'</div>'+
+ '<label>背景</label><div class="row">'+b('theme','kinari','キナリ')+b('theme','white','ホワイト')+b('theme','dark','ダーク')+'</div>'+
+ '<label>パスコード（'+(S.pass?'設定中':'未設定')+'）</label><input id="pI" type="password" inputmode="numeric" placeholder="4桁以上の数字" autocomplete="off"><div class="row"><button id="pSet" class="pri">'+(S.pass?'変更する':'設定する')+'</button>'+(S.pass?'<button id="pOff">解除する</button>':'')+'</div>'+
+ '<div class="row"><button id="sOk">閉じる</button></div>');
+ var bs=document.querySelectorAll('#box button[data-g]');
+ for(var i=0;i<bs.length;i++){bs[i].onclick=function(){var g=this.getAttribute('data-g'),v=this.getAttribute('data-v');S.set[g]=(g==='vertical')?(v==='true'):v;save();applySet();renderQuote();setForm();};}
+ $('sOk').onclick=closeM;
+ $('pSet').onclick=function(){var v=$('pI').value.trim();if(v.length<4){toast('4文字以上で入れてください');return;}S.pass=hash(v);save();toast('パスコードを設定しました');setForm();};
+ var po=$('pOff');if(po){po.onclick=function(){S.pass='';save();toast('パスコードを解除しました');setForm();};}}
+$('bSet').onclick=setForm;
+$('bVert').onclick=function(){S.set.vertical=!S.set.vertical;save();renderQuote();toast(S.set.vertical?'縦書き':'横書き');};
+$('bHelp').onclick=function(){openM('<h2>📖 使い方</h2><ol class="help"><li>上の<b>気分</b>のボタンを押すと、その気分の言葉だけが並びます。横にスワイプすると続きが見えます。</li><li>気分の右の<b>＋ 気分</b>で、いつでも新しい気分をつくれます。</li><li><b>◀ 前 / 次 ▶</b>で言葉をめくります。</li><li><b>＋ 言葉を足す</b>で、大切な言葉をしまえます。その場で新しい気分もつくれます。</li><li><b>🏷 気分を整える</b>で気分の名前変更・削除と、気分ごとのBGM設定ができます。</li><li><b>縦↔横</b>で書き方を切り替え。⚙️で文字のかたち・背景・パスコードを変えられます。</li><li>右下の<b>🎵</b>でBGMの入り切り。📺🎵はYouTubeの音を裏で流している印です。</li><li>この書庫はこの端末の中だけにあり、コピーや共有はできません。</li></ol><div class="row"><button id="hOk" class="pri">とじる</button></div>');$('hOk').onclick=closeM;};
+$('chips').addEventListener('click',function(e){var t=e.target;while(t&&t!==this&&!(t.getAttribute&&t.getAttribute('data-t')))t=t.parentNode;if(t&&t.getAttribute&&t.getAttribute('data-t'))selTag(t.getAttribute('data-t'));});
+$('bPrev').onclick=function(){idx--;renderQuote();};
+$('bNext').onclick=function(){idx++;renderQuote();};
+['copy','cut','contextmenu','dragstart'].forEach(function(ev){document.addEventListener(ev,function(e){var n=e.target&&e.target.tagName;if(n==='INPUT'||n==='TEXTAREA')return;e.preventDefault();});});
+// ---- Lock ----
+function tryUnlock(){var v=$('lockIn').value;if(hash(v)===S.pass){$('lock').classList.remove('show');$('lockIn').value='';$('msg').textContent='';}else{$('msg').textContent='❌ パスコードが違います';$('lockIn').value='';}}
+$('lockBtn').onclick=tryUnlock;$('lockIn').addEventListener('keydown',function(e){if(e.key==='Enter')tryUnlock();});
+if(S.pass){$('lock').classList.add('show');}
+// ---- PWA ----
+try{if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(function(){});}}catch(e){}
+var dp=null,ins=$('install');
+function hideIns(){if(ins)ins.classList.remove('show');sset('natoki_ins','1');}
+try{
+ var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone;
+ if(!sget('natoki_ins')&&!standalone){
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();dp=e;setTimeout(function(){if(ins)ins.classList.add('show');},1200);});
+  if(/iphone|ipad/i.test(navigator.userAgent)){var p=ins.querySelector('p');if(p)p.textContent='📲 共有ボタンから「ホーム画面に追加」でアプリとして使えます';var g=$('insGo');if(g)g.style.display='none';setTimeout(function(){ins.classList.add('show');},1500);}
+ }
+}catch(e){}
+$('insNo').onclick=hideIns;
+$('insGo').onclick=function(){try{if(dp){dp.prompt();dp.userChoice.then(hideIns);}else{hideIns();}}catch(e){hideIns();}};
+applySet();renderChips();renderQuote();updBgm();
+});
+</script>
+<footer style="text-align: center; font-size: 0.75rem; color: #888; margin-top: 3rem; padding: 1rem 0.5rem; line-height: 1.5;">
+  <p style="margin-bottom: 0.5rem;">【ご利用について】</p>
+  <p style="margin-bottom: 0.5rem;">本アプリの利用に伴うトラブルやデータ損失等について、開発者は一切の責任を負いかねます。</p>
+  <p style="margin-bottom: 0.5rem;">ご意見・不具合のご報告は X（<a href="https://x.com/lblt_labo" target="_blank" rel="noopener" style="color: #666; text-decoration: underline;">@lblt_labo</a>）までお願いいたします。</p>
+  <p style="margin-top: 0.5rem;"><a href="https://ofuse.me/lbltlabo/letter" target="_blank" rel="noopener noreferrer" style="color: #666; text-decoration: underline;">☕️ 開発者を応援する / メッセージを送る</a></p>
+</footer>
+</body>
+</html>
